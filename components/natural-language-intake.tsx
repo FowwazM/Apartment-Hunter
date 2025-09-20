@@ -16,6 +16,7 @@ interface ParsedCriteria {
   petFriendly?: boolean
   moveInDate?: string
   commute?: string
+  otherPreferences?: string[]
 }
 
 export function NaturalLanguageIntake() {
@@ -26,83 +27,78 @@ export function NaturalLanguageIntake() {
   const [suggestions, setSuggestions] = useState<string[]>([])
 
   useEffect(() => {
-    if (query.length > 10) {
-      const criteria = parseQuery(query)
-      setParsedCriteria(criteria)
-      generateSuggestions(query)
-    } else {
-      setParsedCriteria({})
-      setSuggestions([])
+    // Clear any existing timeout for criteria parsing
+    const criteriaTimeoutId = setTimeout(() => {
+      if (query.length > 10) {
+        const fetchCriteria = async () => {
+          const criteria = await parseQuery(query)
+          console.log("Parsed Criteria:", criteria)
+          setParsedCriteria(criteria)
+        }
+        fetchCriteria()
+      } else {
+        setParsedCriteria({})
+      }
+    }, 200)
+
+    // Clear any existing timeout for suggestions
+    const suggestionsTimeoutId = setTimeout(() => {
+      if (query.length > 10) {
+        generateSuggestions(query)
+      } else {
+        setSuggestions([])
+      }
+    }, 200)
+
+    return () => {
+      clearTimeout(criteriaTimeoutId)
+      clearTimeout(suggestionsTimeoutId)
     }
   }, [query])
 
-  const parseQuery = (text: string): ParsedCriteria => {
-    const criteria: ParsedCriteria = {}
+  const parseQuery = async (text: string): Promise<ParsedCriteria> => {
+    try {
+      const response = await fetch('/api/get-requirements', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      })
 
-    // Extract bedrooms
-    const bedroomMatch = text.match(/(\d+)[\s-]*(bedroom|br|bed)/i)
-    if (bedroomMatch) criteria.bedrooms = Number.parseInt(bedroomMatch[1])
+      if (!response.ok) {
+        throw new Error('Failed to parse query')
+      }
 
-    // Extract bathrooms
-    const bathroomMatch = text.match(/(\d+(?:\.\d+)?)[\s-]*(bathroom|bath|ba)/i)
-    if (bathroomMatch) criteria.bathrooms = Number.parseFloat(bathroomMatch[1])
-
-    // Extract rent budget
-    const rentMatch = text.match(/under\s*\$?(\d+(?:,\d+)?)|below\s*\$?(\d+(?:,\d+)?)|max\s*\$?(\d+(?:,\d+)?)/i)
-    if (rentMatch) {
-      const amount = rentMatch[1] || rentMatch[2] || rentMatch[3]
-      criteria.maxRent = Number.parseInt(amount.replace(",", ""))
+      const data = await response.json()
+      console.log("API Response:", data);
+      return data.criteria || {}
+    } catch (error) {
+      console.error('Error parsing query:', error)
+      return {}
     }
-
-    // Extract neighborhoods
-    const neighborhoods = []
-    const brooklynMatch = text.match(/brooklyn/i)
-    const manhattanMatch = text.match(/manhattan/i)
-    const queensMatch = text.match(/queens/i)
-    if (brooklynMatch) neighborhoods.push("Brooklyn")
-    if (manhattanMatch) neighborhoods.push("Manhattan")
-    if (queensMatch) neighborhoods.push("Queens")
-    if (neighborhoods.length > 0) criteria.neighborhoods = neighborhoods
-
-    // Extract amenities
-    const amenities = []
-    if (text.match(/gym|fitness/i)) amenities.push("Gym")
-    if (text.match(/parking/i)) amenities.push("Parking")
-    if (text.match(/laundry/i)) amenities.push("Laundry")
-    if (text.match(/pool/i)) amenities.push("Pool")
-    if (text.match(/doorman|concierge/i)) amenities.push("Doorman")
-    if (text.match(/roof|rooftop/i)) amenities.push("Rooftop")
-    if (amenities.length > 0) criteria.amenities = amenities
-
-    // Pet friendly
-    if (text.match(/pet[\s-]friendly|pets?\s+allowed/i)) {
-      criteria.petFriendly = true
-    }
-
-    // Commute preferences
-    const commuteMatch = text.match(/near\s+(subway|train|metro)/i)
-    if (commuteMatch) criteria.commute = "Public Transit"
-
-    return criteria
   }
 
-  const generateSuggestions = (text: string) => {
-    const suggestions = []
+  const generateSuggestions = async (text: string): Promise<void> => {
+    try {
+      const response = await fetch('/api/get-suggestions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text }),
+      })
 
-    if (!text.match(/\$\d+/)) {
-      suggestions.push("Consider adding your budget (e.g., 'under $3000')")
-    }
-    if (!text.match(/\d+[\s-]*(bedroom|br)/i)) {
-      suggestions.push("Specify number of bedrooms (e.g., '2-bedroom')")
-    }
-    if (!text.match(/brooklyn|manhattan|queens|bronx/i)) {
-      suggestions.push("Add preferred neighborhoods (e.g., 'in Brooklyn')")
-    }
-    if (!text.match(/gym|parking|laundry|pool/i)) {
-      suggestions.push("Mention important amenities (e.g., 'with gym')")
-    }
+      if (!response.ok) {
+        throw new Error('Failed to get suggestions')
+      }
 
-    setSuggestions(suggestions.slice(0, 2))
+      const data = await response.json()
+      setSuggestions(data.suggestions || [])
+    } catch (error) {
+      console.error('Error getting suggestions:', error)
+      setSuggestions([])
+    }
   }
 
   const handleVoiceToggle = () => {
@@ -215,7 +211,7 @@ export function NaturalLanguageIntake() {
               AI Detected Criteria
             </h4>
             <div className="flex flex-wrap gap-2">
-              {parsedCriteria.bedrooms && (
+              {typeof parsedCriteria.bedrooms === "number" && parsedCriteria.bedrooms > 0 && (
                 <Badge variant="secondary" className="flex items-center gap-1">
                   <Home className="w-3 h-3" />
                   {parsedCriteria.bedrooms} bedroom{parsedCriteria.bedrooms > 1 ? "s" : ""}
@@ -239,12 +235,17 @@ export function NaturalLanguageIntake() {
                 </Badge>
               ))}
               {parsedCriteria.amenities?.map((amenity) => (
-                <Badge key={amenity} variant="outline">
+                <Badge key={amenity} variant="secondary" className="flex items-center gap-1">
                   {amenity}
                 </Badge>
               ))}
-              {parsedCriteria.petFriendly && <Badge variant="outline">Pet Friendly</Badge>}
-              {parsedCriteria.commute && <Badge variant="outline">{parsedCriteria.commute}</Badge>}
+              {parsedCriteria.petFriendly && <Badge variant="secondary" className="flex items-center gap-1">Pet Friendly</Badge>}
+              {parsedCriteria.commute && <Badge variant="secondary" className="flex items-center gap-1">{parsedCriteria.commute}</Badge>}
+              {parsedCriteria.otherPreferences?.map((pref) => (
+                <Badge key={pref} variant="secondary" className="flex items-center gap-1">
+                  {pref}
+                </Badge>
+              ))}
             </div>
           </div>
         )}

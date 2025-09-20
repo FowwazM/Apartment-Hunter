@@ -5,3 +5,4 @@
 4. GCal Integration
 5. Login/Signup (Auth0)
 6. Connect to MongoDB
+7. Create suggestions & key points - DONE!!! :)
