@@ -1,3 +1,6 @@
+import Exa from "exa-js"
+import { GoogleGenerativeAI } from "@google/generative-ai"
+
 interface PropertySource {
   id: string
   name: string
@@ -51,33 +54,57 @@ interface SearchCriteria {
 }
 
 export class PropertyResearchEngine {
+  private exa: Exa
+  private gemini: GoogleGenerativeAI
   private sources: PropertySource[] = [
     { id: "zillow", name: "Zillow", url: "https://zillow.com", lastUpdated: new Date() },
     { id: "apartments", name: "Apartments.com", url: "https://apartments.com", lastUpdated: new Date() },
     { id: "streeteasy", name: "StreetEasy", url: "https://streeteasy.com", lastUpdated: new Date() },
-    { id: "craigslist", name: "Craigslist", lastUpdated: new Date() },
+    { id: "google", name: "Google", url: "https://google.com", lastUpdated: new Date() },
   ]
 
-  async researchProperties(criteria: SearchCriteria, sessionId: string): Promise<ScoredProperty[]> {
-    console.log(`[v0] Starting property research for session ${sessionId}`)
-
-    // Simulate research from multiple sources
-    const allProperties: RawProperty[] = []
-
-    for (const source of this.sources) {
-      console.log(`[v0] Researching from ${source.name}...`)
-      const properties = await this.searchSource(source, criteria)
-      allProperties.push(...properties)
-
-      // Simulate processing time
-      await new Promise((resolve) => setTimeout(resolve, 500))
+  constructor() {
+    if (!process.env.EXA_API_KEY) {
+      throw new Error("EXA_API_KEY environment variable is required")
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY environment variable is required")
     }
 
-    console.log(`[v0] Found ${allProperties.length} raw properties`)
+    this.exa = new Exa(process.env.EXA_API_KEY)
+    this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+  }
+
+  async researchProperties(criteria: SearchCriteria, sessionId: string): Promise<ScoredProperty[]> {
+    console.log(`[PropertyResearch] Starting property research for session ${sessionId}`)
+
+    // Build search queries for different apartment listing sites
+    const searchQueries = this.buildSearchQueries(criteria)
+    const allProperties: RawProperty[] = []
+
+    // Search each query using Exa
+    for (const query of searchQueries) {
+      console.log(`[PropertyResearch] Searching with query: ${query.text}`)
+      
+      try {
+        const searchResults = await this.searchWithExa(query.text, query.domain)
+        const properties = await this.parseResultsWithGemini(searchResults, criteria, query.source)
+        allProperties.push(...properties)
+
+        // Add delay to avoid rate limiting
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        console.log(`[PropertyResearch] Finished searching with query: ${query.text}`)
+      } catch (error) {
+        console.error(`[PropertyResearch] Error searching ${query.source.name}:`, error)
+        // Continue with other sources even if one fails
+      }
+    }
+
+    console.log(`[PropertyResearch] Found ${allProperties.length} raw properties`)
 
     // Remove duplicates based on address similarity
     const uniqueProperties = this.deduplicateProperties(allProperties)
-    console.log(`[v0] After deduplication: ${uniqueProperties.length} properties`)
+    console.log(`[PropertyResearch] After deduplication: ${uniqueProperties.length} properties`)
 
     // Score and rank properties
     const scoredProperties = this.scoreProperties(uniqueProperties, criteria)
@@ -86,46 +113,155 @@ export class PropertyResearchEngine {
     return scoredProperties.slice(0, 10)
   }
 
-  private async searchSource(source: PropertySource, criteria: SearchCriteria): Promise<RawProperty[]> {
-    // In a real implementation, this would make API calls or scrape websites
-    // For now, we'll generate realistic mock data
+  private buildSearchQueries(criteria: SearchCriteria): Array<{text: string, domain?: string, source: PropertySource}> {
+    const queries = []
+    const location = criteria.neighborhoods?.join(" OR ") || ""
+    const bedrooms = criteria.bedrooms ? `${criteria.bedrooms} bedroom` : ""
+    const maxRent = criteria.maxRent ? `under $${criteria.maxRent}` : ""
+    const amenities = criteria.amenities?.join(" ") || ""
+    const petFriendly = criteria.petFriendly ? "pet friendly" : ""
 
-    const mockProperties: RawProperty[] = []
-    const neighborhoods = criteria.neighborhoods || ["Brooklyn", "Manhattan", "Queens"]
-    const propertyCount = Math.floor(Math.random() * 20) + 10
+    // Build base search query
+    const baseQuery = [
+      "apartment for rent",
+      bedrooms,
+      location,
+      maxRent,
+      amenities,
+      petFriendly
+    ].filter(Boolean).join(" ")
 
-    for (let i = 0; i < propertyCount; i++) {
-      const neighborhood = neighborhoods[Math.floor(Math.random() * neighborhoods.length)]
-      const bedrooms = criteria.bedrooms || Math.floor(Math.random() * 3) + 1
-      const bathrooms = Math.floor(Math.random() * 2) + 1
+    // Create domain-specific queries
+    queries.push({
+      text: `${baseQuery} site:zillow.com`,
+      domain: "zillow.com",
+      source: this.sources.find(s => s.id === "zillow")!
+    })
 
-      // Generate rent with some variation around the max budget
-      const baseRent = criteria.maxRent ? criteria.maxRent * (0.7 + Math.random() * 0.4) : 2000 + Math.random() * 2000
-      const rent = Math.floor(baseRent / 50) * 50 // Round to nearest $50
+    queries.push({
+      text: `${baseQuery} site:apartments.com`,
+      domain: "apartments.com", 
+      source: this.sources.find(s => s.id === "apartments")!
+    })
 
-      mockProperties.push({
-        id: `${source.id}-${i}`,
-        name: this.generatePropertyName(),
-        address: this.generateAddress(neighborhood),
-        latitude: this.getNeighborhoodCoords(neighborhood).lat + (Math.random() - 0.5) * 0.01,
-        longitude: this.getNeighborhoodCoords(neighborhood).lng + (Math.random() - 0.5) * 0.01,
-        bedrooms,
-        bathrooms,
-        rent,
-        squareFeet: bedrooms * 400 + Math.floor(Math.random() * 300),
-        availableDate: this.generateAvailableDate(),
-        amenities: this.generateAmenities(criteria.amenities),
-        photos: this.generatePhotoUrls(),
-        contact: {
-          phone: this.generatePhoneNumber(),
-          email: `leasing@${this.generatePropertyName().toLowerCase().replace(/\s+/g, "")}.com`,
-          website: `https://${this.generatePropertyName().toLowerCase().replace(/\s+/g, "")}.com`,
-        },
-        source,
+    queries.push({
+      text: `${baseQuery} site:streeteasy.com`,
+      domain: "streeteasy.com",
+      source: this.sources.find(s => s.id === "streeteasy")!
+    })
+
+    queries.push({
+      text: `${baseQuery} site:google.com`,
+      domain: "google.com",
+      source: this.sources.find(s => s.id === "google")!
+    })
+
+    return queries
+  }
+
+  private async searchWithExa(query: string, domain?: string): Promise<any[]> {
+    try {
+      const searchResponse = await this.exa.searchAndContents(query, {
+        type: "keyword",
+        useAutoprompt: true,
+        numResults: 10,
+        includeDomains: domain ? [domain] : undefined,
+        text: true,
+        highlights: {
+          query: "apartment rental details: rent, bedrooms, bathrooms, amenities, address, contact",
+          numSentences: 10
+        }
       })
-    }
 
-    return mockProperties
+      return searchResponse.results || []
+    } catch (error) {
+      console.error(`[PropertyResearch] Exa search error:`, error)
+      return []
+    }
+  }
+
+  private async parseResultsWithGemini(searchResults: any[], criteria: SearchCriteria, source: PropertySource): Promise<RawProperty[]> {
+    if (!searchResults.length) { return [] }
+
+    const model = this.gemini.getGenerativeModel({ model: "gemini-2.5-pro" })
+    
+    const prompt = `
+    You are a real estate data extraction expert. Parse the following apartment listing content and extract structured data. 
+
+    For each listing, extract:
+    - name: Property or building name
+    - address: Full street address
+    - bedrooms: Number of bedrooms (integer)
+    - bathrooms: Number of bathrooms (number, can be decimal like 1.5)
+    - rent: Monthly rent amount (integer, just the number)
+    - squareFeet: Square footage if available
+    - availableDate: When available (YYYY-MM-DD format, use today's date if "available now")
+    - amenities: Array of amenities mentioned
+    - photos: Array of photo URLs if any
+    - contact: Object with phone, email, website if available
+    - latitude/longitude: Approximate coordinates for the address (use NYC coordinates if unsure)
+
+    Search Criteria Context:
+    - Looking for: ${criteria.bedrooms || 'any'} bedrooms, max rent $${criteria.maxRent || 'any'}
+    - Neighborhoods: ${criteria.neighborhoods?.join(', ') || 'any NYC area'}
+    - Required amenities: ${criteria.amenities?.join(', ') || 'none specified'}
+
+    Content to parse:
+    ${searchResults.map((result, i) => `
+    === LISTING ${i + 1} ===
+    URL: ${result.url}
+    Title: ${result.title}
+    Content: ${result.text}
+    Highlights: ${result.highlights?.join(' ') || ''}
+    ---
+    `).join('\n')}
+
+    Return a valid JSON array of property objects. If no valid listings found, return empty array [].
+    Only include listings that appear to be legitimate apartment rentals with actual pricing information.
+    `;
+
+    try {
+      const result = await model.generateContent(prompt)
+      const response = await result.response
+      const text = response.text()
+      
+      // Clean up the response to extract JSON
+      let jsonText = text.trim()
+      if (jsonText.startsWith('```json')) {
+        jsonText = jsonText.slice(7)
+      }
+      if (jsonText.endsWith('```')) {
+        jsonText = jsonText.slice(0, -3)
+      }
+      
+      const parsedProperties = JSON.parse(jsonText)
+      
+      // Convert to our RawProperty format and add source
+      return parsedProperties.map((prop: any, index: number) => ({
+        id: `${source.id}-${Date.now()}-${index}`,
+        name: prop.name || 'Unnamed Property',
+        address: prop.address || 'Address not provided',
+        latitude: prop.latitude || '',
+        longitude: prop.longitude || '',
+        bedrooms: parseInt(prop.bedrooms) || 1,
+        bathrooms: parseFloat(prop.bathrooms) || 1,
+        rent: parseInt(prop.rent) || 0,
+        squareFeet: prop.squareFeet || null,
+        availableDate: prop.availableDate || new Date().toISOString().split('T')[0],
+        amenities: Array.isArray(prop.amenities) ? prop.amenities : [],
+        photos: Array.isArray(prop.photos) ? prop.photos : ['/placeholder.svg?height=400&width=600&query=apartment'],
+        contact: {
+          phone: prop.contact?.phone || null,
+          email: prop.contact?.email || null,
+          website: prop.contact?.website || null,
+        },
+        source
+      })).filter((prop: RawProperty) => prop.rent > 0) // Only include listings with valid rent
+      
+    } catch (error) {
+      console.error(`[PropertyResearch] Gemini parsing error:`, error)
+      return []
+    }
   }
 
   private scoreProperties(properties: RawProperty[], criteria: SearchCriteria): ScoredProperty[] {
@@ -248,92 +384,6 @@ export class PropertyResearchEngine {
       seen.add(key)
       return true
     })
-  }
-
-  // Helper methods for generating mock data
-  private generatePropertyName(): string {
-    const adjectives = ["Modern", "Luxury", "Classic", "Urban", "Elegant", "Contemporary", "Historic", "Premium"]
-    const nouns = ["Heights", "Plaza", "Tower", "Gardens", "Court", "Manor", "Residences", "Commons"]
-    return `${adjectives[Math.floor(Math.random() * adjectives.length)]} ${nouns[Math.floor(Math.random() * nouns.length)]}`
-  }
-
-  private generateAddress(neighborhood: string): string {
-    const streetNumbers = Math.floor(Math.random() * 999) + 1
-    const streetNames = ["Oak St", "Main Ave", "Park Blvd", "Broadway", "1st Ave", "2nd St", "Union St", "Court St"]
-    const streetName = streetNames[Math.floor(Math.random() * streetNames.length)]
-    return `${streetNumbers} ${streetName}, ${neighborhood}, NY`
-  }
-
-  private getNeighborhoodCoords(neighborhood: string) {
-    const coords = {
-      Brooklyn: { lat: 40.6782, lng: -73.9442 },
-      Manhattan: { lat: 40.7831, lng: -73.9712 },
-      Queens: { lat: 40.7282, lng: -73.7949 },
-      Bronx: { lat: 40.8448, lng: -73.8648 },
-    }
-    return coords[neighborhood as keyof typeof coords] || coords.Brooklyn
-  }
-
-  private generateAvailableDate(): string {
-    const now = new Date()
-    const daysToAdd = Math.floor(Math.random() * 90) // 0-90 days from now
-    const availableDate = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000)
-    return availableDate.toISOString().split("T")[0]
-  }
-
-  private generateAmenities(requestedAmenities?: string[]): string[] {
-    const allAmenities = [
-      "Gym",
-      "Pool",
-      "Laundry",
-      "Parking",
-      "Doorman",
-      "Rooftop",
-      "Balcony",
-      "Dishwasher",
-      "Air Conditioning",
-      "Hardwood Floors",
-      "Pet Friendly",
-      "Elevator",
-      "Storage",
-      "Bike Storage",
-      "Concierge",
-    ]
-
-    const numAmenities = Math.floor(Math.random() * 6) + 3
-    const selectedAmenities = []
-
-    // Include some requested amenities if specified
-    if (requestedAmenities) {
-      requestedAmenities.forEach((amenity) => {
-        if (Math.random() > 0.3) {
-          // 70% chance to include requested amenity
-          selectedAmenities.push(amenity)
-        }
-      })
-    }
-
-    // Fill remaining slots with random amenities
-    while (selectedAmenities.length < numAmenities) {
-      const randomAmenity = allAmenities[Math.floor(Math.random() * allAmenities.length)]
-      if (!selectedAmenities.includes(randomAmenity)) {
-        selectedAmenities.push(randomAmenity)
-      }
-    }
-
-    return selectedAmenities
-  }
-
-  private generatePhotoUrls(): string[] {
-    const photoCount = Math.floor(Math.random() * 8) + 3
-    return Array.from(
-      { length: photoCount },
-      (_, i) => `/placeholder.svg?height=400&width=600&query=modern apartment interior ${i + 1}`,
-    )
-  }
-
-  private generatePhoneNumber(): string {
-    return `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`
   }
 
   private extractNeighborhood(address: string): string {
