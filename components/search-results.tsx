@@ -1,305 +1,183 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import { ResearchProgress } from "@/components/research-progress"
-import { InteractiveMap } from "@/components/interactive-map"
-import { VoiceAgent } from "@/components/voice-agent"
-import { CallResults } from "@/components/call-results"
-import { MapPin, Phone, Calendar, Star, DollarSign, Home, Wifi, List, Map } from "lucide-react"
+import { useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { InteractiveMap } from "@/components/interactive-map";
+import { Phone } from "lucide-react";
 
 interface SearchResultsProps {
-  sessionId: string
+  sessionId: string;
 }
 
 interface PropertyResult {
-  id: string
-  name: string
-  address: string
-  coordinates: { lat: number; lng: number }
-  bedrooms: number
-  bathrooms: number
-  rent: number
-  squareFeet?: number
-  availableDate: string
-  amenities: string[]
-  photos: string[]
-  contact: {
-    phone?: string
-    email?: string
-    website?: string
-  }
-  score: number
-  scoreBreakdown: {
-    budget: number
-    location: number
-    amenities: number
-    size: number
-    availability: number
-    overall: number
-  }
-  ranking: number
-  source: string
+  id: string;
+  name: string;
+  address: string;
+  coordinates: { lat: number; lng: number };
+  bedrooms: number;
+  bathrooms: number;
+  rent: number;
+  squareFeet?: number;
+  availableDate: string;
+  amenities: string[];
+  photos: string[];
+  score: number;
+  ranking: number;
 }
 
-export function SearchResults({ sessionId }: SearchResultsProps) {
-  const [results, setResults] = useState<PropertyResult[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [selectedProperty, setSelectedProperty] = useState<string>("")
-  const [activeView, setActiveView] = useState<"list" | "map">("map")
-  const [voiceAgentOpen, setVoiceAgentOpen] = useState(false)
-  const [callResults, setCallResults] = useState<any>(null)
-  const [activePropertyForCall, setActivePropertyForCall] = useState<PropertyResult | null>(null)
+// Dummy data for testing
+const dummyProperties: PropertyResult[] = [
+  {
+    id: "1",
+    name: "The Murray Hill",
+    address: "150 E 34th St, New York, NY 10016",
+    coordinates: { lat: 40.7459, lng: -73.9795 },
+    bedrooms: 2,
+    bathrooms: 2,
+    rent: 3500,
+    squareFeet: 1200,
+    availableDate: "2025-09-30",
+    amenities: ["Gym", "Pool", "Parking"],
+    photos: ["/placeholder.svg"],
+    score: 95,
+    ranking: 1,
+  },
+  {
+    id: "2",
+    name: "The Parker",
+    address: "104-20 Queens Blvd, Forest Hills, NY 11375",
+    coordinates: { lat: 40.7213, lng: -73.8443 },
+    bedrooms: 1,
+    bathrooms: 1,
+    rent: 2000,
+    squareFeet: 600,
+    availableDate: "2025-10-15",
+    amenities: ["Laundry", "Pet Friendly"],
+    photos: ["/placeholder.svg"],
+    score: 85,
+    ranking: 2,
+  },
+  {
+    id: "3",
+    name: "Atlantic Terminal",
+    address: "789 Atlantic Ave, Brooklyn, NY 11238",
+    coordinates: { lat: 40.682, lng: -73.972 },
+    bedrooms: 3,
+    bathrooms: 2,
+    rent: 4000,
+    squareFeet: 1500,
+    availableDate: "2025-11-01",
+    amenities: ["Rooftop Access", "Doorman"],
+    photos: ["/placeholder.svg"],
+    score: 90,
+    ranking: 3,
+  },
+  {
+    id: "4",
+    name: "Bronx Heights",
+    address: "445 Gerard Ave, Bronx, NY 10451",
+    coordinates: { lat: 40.8175706, lng: -74.0062755 },
+    bedrooms: 4,
+    bathrooms: 2.5,
+    rent: 6000,
+    squareFeet: 2000,
+    availableDate: "2025-11-18",
+    amenities: ["Rooftop Access", "Doorman"],
+    photos: ["/placeholder.svg"],
+    score: 87,
+    ranking: 4,
+  },
+];
 
-  const handleResearchComplete = (researchData: any) => {
-    setResults(researchData.results || [])
-    setIsLoading(false)
-    if (researchData.results && researchData.results.length > 0) {
-      setSelectedProperty(researchData.results[0].id)
-    }
-  }
+export function SearchResults({ sessionId }: SearchResultsProps) {
+  const [results, setResults] = useState<PropertyResult[]>(dummyProperties);
+  const [selectedProperty, setSelectedProperty] = useState<string>("");
 
   const handlePropertySelect = (propertyId: string) => {
-    setSelectedProperty(propertyId)
-  }
+    setSelectedProperty(propertyId);
+  };
 
-  const handleStartVoiceAgent = (property: PropertyResult) => {
-    setActivePropertyForCall(property)
-    setCallResults(null)
-    setVoiceAgentOpen(true)
-  }
-
-  const handleCallComplete = (result: any) => {
-    setCallResults(result)
-  }
-
-  const handleScheduleAnother = () => {
-    setCallResults(null)
-  }
-
-  const handleViewTour = () => {
-    setVoiceAgentOpen(false)
-    // Navigate to tour dashboard
-  }
-
-  if (isLoading) {
-    return <ResearchProgress sessionId={sessionId} onComplete={handleResearchComplete} />
-  }
+  const handleCall = (property: PropertyResult) => {
+    console.log(
+      `Initiating call to ${property.name} at ${property.address}...`
+    );
+    // TODO: Integrate with voice agent API or component
+  };
 
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold">Your Top Apartment Matches</h1>
         <p className="text-muted-foreground">
-          Found {results.length} apartments that match your criteria • Session: {sessionId.slice(0, 8)}
+          Found {results.length} apartments that match your criteria
         </p>
       </div>
 
-      <Tabs value={activeView} onValueChange={(value) => setActiveView(value as "list" | "map")} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto">
-          <TabsTrigger value="map" className="flex items-center gap-2">
-            <Map className="w-4 h-4" />
-            Map View
-          </TabsTrigger>
-          <TabsTrigger value="list" className="flex items-center gap-2">
-            <List className="w-4 h-4" />
-            List View
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="map" className="space-y-6">
-          {results.length > 0 && (
-            <InteractiveMap
-              properties={results}
-              selectedProperty={selectedProperty}
-              onPropertySelect={handlePropertySelect}
-            />
-          )}
-        </TabsContent>
-
-        <TabsContent value="list" className="space-y-6">
-          <div className="grid gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-8">
+        <ScrollArea className="h-[70vh] pr-4">
+          <div className="space-y-3">
             {results.map((property) => (
               <Card
                 key={property.id}
-                className={`overflow-hidden cursor-pointer transition-all ${
-                  selectedProperty === property.id ? "ring-2 ring-primary" : ""
+                className={`cursor-pointer transition-all ${
+                  selectedProperty === property.id
+                    ? "border-primary shadow-lg"
+                    : "hover:shadow-md"
                 }`}
                 onClick={() => handlePropertySelect(property.id)}
               >
-                <div className="flex">
-                  {/* Property Image */}
-                  <div className="w-64 h-48 bg-muted flex-shrink-0">
-                    <img
-                      src={property.photos[0] || "/placeholder.svg"}
-                      alt={property.name}
-                      className="w-full h-full object-cover"
-                    />
+                <div className="p-3">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h3 className="text-lg font-semibold">{property.name}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {property.address}
+                      </p>
+                    </div>
+                    <div className="text-right pl-2">
+                      <p className="font-semibold">
+                        ${property.rent?.toLocaleString() ?? "N/A"}/mo
+                      </p>
+                    </div>
                   </div>
-
-                  {/* Property Details */}
-                  <div className="flex-1 p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="text-xl font-semibold">{property.name}</h3>
-                          <Badge variant="secondary">#{property.ranking}</Badge>
-                        </div>
-                        <p className="text-muted-foreground flex items-center gap-1">
-                          <MapPin className="w-4 h-4" />
-                          {property.address}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <div className="flex items-center gap-1 mb-1">
-                          <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                          <span className="font-semibold">{property.score}/100</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground">AI Score</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div className="flex items-center gap-2">
-                        <Home className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm">
-                          {property.bedrooms} bed, {property.bathrooms} bath
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm">${property.rent.toLocaleString()}/mo</span>
-                      </div>
-                      {property.squareFeet && (
-                        <div className="flex items-center gap-2">
-                          <Wifi className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm">{property.squareFeet} sq ft</span>
-                        </div>
-                      )}
-                      <div className="text-sm text-muted-foreground">
-                        Available: {new Date(property.availableDate).toLocaleDateString()}
-                      </div>
-                    </div>
-
-                    <div className="mb-4">
-                      <p className="text-sm font-medium mb-2">Amenities:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {property.amenities.slice(0, 6).map((amenity) => (
-                          <Badge key={amenity} variant="outline" className="text-xs">
-                            {amenity}
-                          </Badge>
-                        ))}
-                        {property.amenities.length > 6 && (
-                          <Badge variant="outline" className="text-xs">
-                            +{property.amenities.length - 6} more
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mb-4">
-                      <p className="text-sm font-medium mb-2">Score Breakdown:</p>
-                      <div className="grid grid-cols-5 gap-2 text-xs">
-                        <div className="text-center">
-                          <div className="font-medium">{property.scoreBreakdown.budget}</div>
-                          <div className="text-muted-foreground">Budget</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium">{property.scoreBreakdown.location}</div>
-                          <div className="text-muted-foreground">Location</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium">{property.scoreBreakdown.amenities}</div>
-                          <div className="text-muted-foreground">Amenities</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium">{property.scoreBreakdown.size}</div>
-                          <div className="text-muted-foreground">Size</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="font-medium">{property.scoreBreakdown.availability}</div>
-                          <div className="text-muted-foreground">Available</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <Dialog open={voiceAgentOpen} onOpenChange={setVoiceAgentOpen}>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" onClick={() => handleStartVoiceAgent(property)}>
-                            <Phone className="w-4 h-4 mr-2" />
-                            Call Property
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                          <DialogHeader>
-                            <DialogTitle>AI Voice Agent</DialogTitle>
-                            <DialogDescription>
-                              Let our AI agent call the property and handle the conversation for you
-                            </DialogDescription>
-                          </DialogHeader>
-                          {activePropertyForCall && !callResults && (
-                            <VoiceAgent
-                              property={{
-                                id: activePropertyForCall.id,
-                                name: activePropertyForCall.name,
-                                address: activePropertyForCall.address,
-                                contact: activePropertyForCall.contact,
-                              }}
-                              onCallComplete={handleCallComplete}
-                            />
-                          )}
-                          {callResults && activePropertyForCall && (
-                            <CallResults
-                              result={callResults}
-                              propertyName={activePropertyForCall.name}
-                              onScheduleAnother={handleScheduleAnother}
-                              onViewTour={handleViewTour}
-                            />
-                          )}
-                        </DialogContent>
-                      </Dialog>
-                      <Button size="sm">
-                        <Calendar className="w-4 h-4 mr-2" />
-                        Schedule Tour
+                  <div className="flex items-center gap-x-4 text-sm text-muted-foreground mb-3">
+                    <span>{property.bedrooms} beds</span>
+                    <span>{property.bathrooms} baths</span>
+                    <span>
+                      {property.squareFeet
+                        ? `${property.squareFeet.toLocaleString()} sqft`
+                        : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-end h-9">
+                    {selectedProperty === property.id && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent card's onClick from firing again
+                          handleCall(property);
+                        }}
+                      >
+                        <Phone className="w-4 h-4 mr-2" />
+                        Call Now
                       </Button>
-                      <Button variant="ghost" size="sm">
-                        View Details
-                      </Button>
-                    </div>
-
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      Source: {property.source} • Contact: {property.contact.phone}
-                    </div>
+                    )}
                   </div>
                 </div>
               </Card>
             ))}
           </div>
-        </TabsContent>
-      </Tabs>
-
-      {results.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <h3 className="text-lg font-medium mb-2">No matches found</h3>
-            <p className="text-muted-foreground">
-              Try adjusting your search criteria or expanding your budget/location preferences.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+        </ScrollArea>
+        <div className="h-[70vh] rounded-lg overflow-hidden">
+          <InteractiveMap
+            properties={results}
+            selectedProperty={selectedProperty}
+            onPropertySelect={handlePropertySelect}
+          />
+        </div>
+      </div>
     </div>
-  )
+  );
 }
