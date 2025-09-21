@@ -27,17 +27,9 @@ interface Tour {
   callId?: string
 }
 
-interface ActiveCall {
-  id: string
-  propertyName: string
-  status: "dialing" | "connected" | "speaking" | "completed" | "failed"
-  duration: number
-  progress: number
-  currentAction: string
-}
-
 export function SchedulingDashboard() {
   const [tours, setTours] = useState<Tour[]>([])
+  const [loading, setLoading] = useState(true)
   const [completionModal, setCompletionModal] = useState<{ isOpen: boolean; tourId: string | null }>({
     isOpen: false,
     tourId: null,
@@ -50,53 +42,71 @@ export function SchedulingDashboard() {
   })
 
   useEffect(() => {
-    setTours([
-      {
-        id: "1",
-        propertyName: "Modern Heights",
-        address: "123 Oak St, Brooklyn, NY",
-        date: "2024-01-20",
-        time: "2:00 PM",
-        status: "scheduled",
-        contact: {
-          name: "Sarah Johnson",
-          phone: "(555) 123-4567",
-          email: "sarah@modernheights.com",
-        },
-        confirmationCode: "APT-MH2024",
-        notes: "Ask about parking availability",
-      },
-      {
-        id: "2",
-        propertyName: "Urban Plaza",
-        address: "456 Main Ave, Manhattan, NY",
-        date: "2024-01-21",
-        time: "11:00 AM",
-        status: "confirmed",
-        contact: {
-          name: "Mike Chen",
-          phone: "(555) 987-6543",
-          email: "mike@urbanplaza.com",
-        },
-        confirmationCode: "APT-UP2024",
-      },
-      {
-        id: "3",
-        propertyName: "Garden Court",
-        address: "789 Park Rd, Queens, NY",
-        date: "2024-01-18",
-        time: "3:30 PM",
-        status: "completed",
-        contact: {
-          name: "Lisa Wong",
-          phone: "(555) 456-7890",
-          email: "lisa@gardencourt.com",
-        },
-        confirmationCode: "APT-GC2024",
-        rating: 4,
-      },
-    ])
+    fetchTours()
   }, [])
+
+  const fetchTours = async () => {
+    try {
+      const response = await fetch("/api/tours")
+      if (response.ok) {
+        const toursData = await response.json()
+        setTours(toursData)
+      } else {
+        console.error("Failed to fetch tours")
+        // Fallback to mock data if API fails
+        setTours([
+          {
+            id: "1",
+            propertyName: "Modern Heights",
+            address: "123 Oak St, Brooklyn, NY",
+            date: "2024-01-20",
+            time: "2:00 PM",
+            status: "scheduled",
+            contact: {
+              name: "Sarah Johnson",
+              phone: "(555) 123-4567",
+              email: "sarah@modernheights.com",
+            },
+            confirmationCode: "APT-MH2024",
+            notes: "Ask about parking availability",
+          },
+          {
+            id: "2",
+            propertyName: "Urban Plaza",
+            address: "456 Main Ave, Manhattan, NY",
+            date: "2024-01-21",
+            time: "11:00 AM",
+            status: "confirmed",
+            contact: {
+              name: "Mike Chen",
+              phone: "(555) 987-6543",
+              email: "mike@urbanplaza.com",
+            },
+            confirmationCode: "APT-UP2024",
+          },
+          {
+            id: "3",
+            propertyName: "Garden Court",
+            address: "789 Park Rd, Queens, NY",
+            date: "2024-01-18",
+            time: "3:30 PM",
+            status: "completed",
+            contact: {
+              name: "Lisa Wong",
+              phone: "(555) 456-7890",
+              email: "lisa@gardencourt.com",
+            },
+            confirmationCode: "APT-GC2024",
+            rating: 4,
+          },
+        ])
+      }
+    } catch (error) {
+      console.error("Error fetching tours:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -143,20 +153,30 @@ export function SchedulingDashboard() {
     setCompletionNotes("")
   }
 
-  const submitTourCompletion = () => {
+  const submitTourCompletion = async () => {
     if (completionModal.tourId && completionRating > 0) {
-      setTours((prevTours) =>
-        prevTours.map((tour) =>
-          tour.id === completionModal.tourId
-            ? {
-                ...tour,
-                status: "completed" as const,
-                rating: completionRating,
-                notes: completionNotes || tour.notes,
-              }
-            : tour,
-        ),
-      )
+      try {
+        const response = await fetch(`/api/tours/${completionModal.tourId}/complete`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            rating: completionRating,
+            notes: completionNotes,
+          }),
+        })
+
+        if (response.ok) {
+          const updatedTour = await response.json()
+          setTours((prevTours) => prevTours.map((tour) => (tour.id === completionModal.tourId ? updatedTour : tour)))
+        } else {
+          console.error("Failed to complete tour")
+        }
+      } catch (error) {
+        console.error("Error completing tour:", error)
+      }
+
       setCompletionModal({ isOpen: false, tourId: null })
       setCompletionRating(0)
       setCompletionNotes("")
@@ -165,6 +185,31 @@ export function SchedulingDashboard() {
 
   const viewTourDetails = (tour: Tour) => {
     setDetailsModal({ isOpen: true, tour })
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Scheduling Dashboard</h1>
+            <p className="text-muted-foreground">Loading your apartment tours...</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
   }
 
   return (
