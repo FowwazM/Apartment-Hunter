@@ -34,6 +34,59 @@ export function CallResults({ result, propertyName, onScheduleAnother, onViewTou
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
+  
+  // Calls backend API to create a calendar event automatically
+  const handleAddToCalendar = async () => {
+    if (!result.tourScheduled || !result.tourDetails) return;
+    // Load Google Identity Services script if needed
+    const loadGsi = () => new Promise<void>((resolve, reject) => {
+      if ((window as any).google?.accounts?.oauth2) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true;
+      s.defer = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('GSI load failed')); 
+      document.head.appendChild(s);
+    });
+    try {
+      await loadGsi();
+      const client = (window as any).google.accounts.oauth2.initTokenClient({
+        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!,
+        scope: 'https://www.googleapis.com/auth/calendar.events',
+        callback: async (tokenResponse: any) => {
+          if (tokenResponse.error) {
+            alert('Calendar auth error: ' + tokenResponse.error);
+            return;
+          }
+          const token = tokenResponse.access_token;
+          // Safe non-null assertion after guard
+          const details = result.tourDetails!;
+          const start = new Date(`${details.date}T${details.time}`);
+          const end = new Date(start.getTime() + 60 * 60 * 1000);
+          const eventBody = {
+            summary: `Tour at ${propertyName}`,
+            location: propertyName,
+            description: result.summary,
+            start: { dateTime: start.toISOString() },
+            end: { dateTime: end.toISOString() }
+          };
+          const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(eventBody)
+          });
+          const data = await res.json();
+          if (data.htmlLink) window.open(data.htmlLink, '_blank');
+          else alert('Failed to create event');
+        }
+      });
+      client.requestAccessToken();
+    } catch (e: any) {
+      console.error('Add to calendar error:', e);
+      alert('Add to calendar failed: ' + e.message);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -119,7 +172,7 @@ export function CallResults({ result, propertyName, onScheduleAnother, onViewTou
             </div>
 
             <div className="flex gap-3">
-              <Button onClick={onViewTour} className="flex-1">
+              <Button onClick={handleAddToCalendar} className="flex-1">
                 <Calendar className="w-4 h-4 mr-2" />
                 Add to Calendar
               </Button>
