@@ -268,6 +268,8 @@ export function SearchResults({ sessionId }: SearchResultsProps) {
   };
 
   const handleStartVoiceAgent = (property: PropertyResult) => {
+    // Ensure the selected property matches before opening the dialog
+    setSelectedProperty(property.id);
     setActivePropertyForCall(property);
     setCallResults(null);
     setVoiceAgentOpen(true);

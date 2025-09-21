@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
-import { Phone, PhoneCall, PhoneOff, CheckCircle, XCircle, Calendar, MessageSquare, Volume2 } from "lucide-react"
+import { Phone, PhoneCall, PhoneOff, CheckCircle, XCircle, Calendar, MessageSquare, Volume2, HelpCircle, CornerDownRight } from "lucide-react"
 
 interface VoiceAgentProps {
   property: {
@@ -47,12 +47,12 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
   const [callProgress, setCallProgress] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
+  const [parsedDateTime, setParsedDateTime] = useState<string | null>(null)
+  const [parsedQA, setParsedQA] = useState<Array<{ q: string; a: string }>>([])
+
   const defaultQuestions = [
     "Is the unit still available?",
     "What is the exact move-in date?",
-    "Are pets allowed?",
-    "What utilities are included?",
-    "Is there parking available?",
     "Can we schedule a tour?",
   ]
 
@@ -80,34 +80,67 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
     }
   }, [callStatus])
 
+  function buildUserQuestions(): string[] {
+    // Split by newline, comma, or semicolon; trim; drop empties; dedupe
+    const extra = Array.from(
+      new Set(
+        customQuestions
+          .split(/[\n,;]+/g)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      )
+    )
+    // Merge with defaults, deduped
+    return Array.from(new Set([...defaultQuestions, ...extra]))
+  }
+
+  // Parse "YYYY-MM-DD HH:MM:SS; q1; a1; q2; a2; ..."
+  function parseSummary(summary: string) {
+    const parts = summary.split(";").map((s) => s.trim()).filter(Boolean)
+    if (parts.length === 0) return { dt: null as string | null, qa: [] as Array<{ q: string; a: string }> }
+
+    const first = parts[0]
+    const dtRegex = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/
+    const hasDate = dtRegex.test(first)
+    const dt = hasDate ? first : null
+    const startIdx = hasDate ? 1 : 0
+
+    const qa: Array<{ q: string; a: string }> = []
+    for (let i = startIdx; i < parts.length; i += 2) {
+      const q = parts[i]
+      const a = parts[i + 1] ?? ""
+      if (q) qa.push({ q, a })
+    }
+    return { dt, qa }
+  }
+
   const startCall = async () => {
     try {
       setErrorMsg(null)
       setTranscript([])
+      setParsedQA([])
+      setParsedDateTime(null)
       setCallProgress(0)
       setCallDuration(0)
 
-      // Build questions array from defaults + custom (one per line)
-      const extraQs = customQuestions
-        .split("\n")
-        .map((s) => s.trim())
-        .filter(Boolean)
-      const questions = [...defaultQuestions, ...extraQs]
+      const userQuestions = buildUserQuestions()
 
       // 1) Begin: set UI state
       setCallStatus("dialing")
       setCurrentMessage("Contacting the property via voice agent…")
 
-      // 2) Call your make-call route — this route should (server-side) resolve the phone,
-      // create the Vapi call, poll until status === "ended", and return { summary, transcript }.
+      const payload = {
+        listingName: property.name,
+        listingAddress: property.address,
+        userQuestions,
+      }
+      console.log("[VoiceAgent] POST /api/make-call payload:", payload)
+
+      // 2) Call your make-call route — server creates Vapi call, polls to 'ended', returns { summary, transcript }
       const res = await fetch("/api/make-call", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          listingName: property.name,
-          listingAddress: property.address,
-          userQuestions: questions,
-        }),
+        body: JSON.stringify(payload),
       })
 
       setCallStatus("waiting")
@@ -132,21 +165,42 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
       setCurrentMessage("Call completed successfully.")
       setCallStatus("completed")
 
-      // display transcript text in the Live Transcript box
+      // Live transcript box
       if (data.transcript) {
         setTranscript(String(data.transcript).split("\n").filter(Boolean))
       }
 
-      // shape into your CallResult interface
+      const summary: string = String(data.summary || "")
+      const { dt, qa } = parseSummary(summary)
+      setParsedDateTime(dt)
+      setParsedQA(qa)
+
+      // Prepare CallResult for parent
+      let dateStr = ""
+      let timeStr = ""
+      if (dt) {
+        // split "YYYY-MM-DD HH:MM:SS"
+        const [d, t] = dt.split(/\s+/)
+        dateStr = d
+        timeStr = t
+      }
+
       const result: CallResult = {
         success: true,
         duration: callDuration,
         transcript: data.transcript || "",
-        summary: data.summary || "",
-        tourScheduled: /schedule|tour|viewing/i.test(String(data.summary || "")),
-        // optional — parse date/time from summary later if needed
-        questionsAsked: questions,
-        answersReceived: [], // optional: parse structured answers from transcript later
+        summary,
+        tourScheduled: /schedule|tour|viewing/i.test(summary),
+        tourDetails: dt
+          ? {
+              date: dateStr,
+              time: timeStr,
+              contact: property.name,
+              confirmationCode: "",
+            }
+          : undefined,
+        questionsAsked: qa.map((x) => x.q),
+        answersReceived: qa.map((x) => x.a),
       }
 
       onCallComplete(result)
@@ -163,6 +217,8 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
     setCallProgress(0)
     setTranscript([])
     setErrorMsg(null)
+    setParsedQA([])
+    setParsedDateTime(null)
   }
 
   const formatDuration = (seconds: number) => {
@@ -268,7 +324,7 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
           <div className="space-y-2">
             <label className="text-sm font-medium">Additional Questions:</label>
             <Textarea
-              placeholder="Add any specific questions you'd like the agent to ask (one per line)…"
+              placeholder="Add any specific questions you'd like the agent to ask (separate by new lines, commas, or semicolons)…"
               value={customQuestions}
               onChange={(e) => setCustomQuestions(e.target.value)}
               className="min-h-[80px]"
@@ -293,10 +349,47 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
           </div>
         )}
 
+        {/* Parsed Results (Date/Time + Q&A) */}
+        {callStatus === "completed" && (
+          <div className="space-y-3">
+            <h4 className="font-medium flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Parsed Appointment & Answers
+            </h4>
+
+            {parsedDateTime ? (
+              <p className="text-sm">
+                <span className="font-medium">Proposed time:</span> {parsedDateTime}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">No date/time detected in summary.</p>
+            )}
+
+            {parsedQA.length > 0 ? (
+              <div className="space-y-2">
+                {parsedQA.map(({ q, a }, idx) => (
+                  <div key={idx} className="text-sm">
+                    <div className="flex items-start gap-2">
+                      <HelpCircle className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                      <span className="font-medium">{q}</span>
+                    </div>
+                    <div className="flex items-start gap-2 ml-6 mt-1">
+                      <CornerDownRight className="w-4 h-4 mt-0.5 text-muted-foreground" />
+                      <span>{a || <span className="text-muted-foreground">No answer provided</span>}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No Q/A pairs found in summary.</p>
+            )}
+          </div>
+        )}
+
         {/* Call Actions */}
         <div className="flex gap-3">
           {(callStatus === "idle" || callStatus === "failed") && (
-            <Button onClick={startCall} className="flex-1" disabled={callStatus === "dialing" || callStatus === "waiting"}>
+            <Button onClick={startCall} className="flex-1">
               <PhoneCall className="w-4 h-4 mr-2" />
               Start Voice Agent Call
             </Button>
