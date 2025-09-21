@@ -58,7 +58,7 @@ export class PropertyResearchEngine {
   private exa: Exa
   private gemini: GoogleGenerativeAI
   private sources: PropertySource[] = [
-    { id: "google", name: "Google", url: "https://google.com", lastUpdated: new Date() },
+    { id: "apartments", name: "Apartments.com", url: "https://apartments.com", lastUpdated: new Date() },
   ]
 
   // private sources: PropertySource[] = [
@@ -193,11 +193,11 @@ export class PropertyResearchEngine {
     ].filter(Boolean).join(" ")
 
     // Create domain-specific queries
-    queries.push({
-      text: `${baseQuery} site:zillow.com`,
-      domain: "zillow.com",
-      source: this.sources.find(s => s.id === "zillow")!
-    })
+    // queries.push({
+    //   text: `${baseQuery} site:zillow.com`,
+    //   domain: "zillow.com",
+    //   source: this.sources.find(s => s.id === "zillow")!
+    // })
 
     queries.push({
       text: `${baseQuery} site:apartments.com`,
@@ -205,17 +205,17 @@ export class PropertyResearchEngine {
       source: this.sources.find(s => s.id === "apartments")!
     })
 
-    queries.push({
-      text: `${baseQuery} site:streeteasy.com`,
-      domain: "streeteasy.com",
-      source: this.sources.find(s => s.id === "streeteasy")!
-    })
+    // queries.push({
+    //   text: `${baseQuery} site:streeteasy.com`,
+    //   domain: "streeteasy.com",
+    //   source: this.sources.find(s => s.id === "streeteasy")!
+    // })
 
-    queries.push({
-      text: `${baseQuery} site:google.com`,
-      domain: "google.com",
-      source: this.sources.find(s => s.id === "google")!
-    })
+    // queries.push({
+    //   text: `${baseQuery} site:google.com`,
+    //   domain: "google.com",
+    //   source: this.sources.find(s => s.id === "google")!
+    // })
 
     return queries
   }

@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import sessionManager from "@/lib/session-manager"
 
 interface StatusParams {
   params: {
@@ -10,39 +11,40 @@ export async function GET(request: NextRequest, { params }: StatusParams) {
   try {
     const { sessionId } = params
 
-    // In a real implementation, this would check database for session status
-    // For now, we'll simulate the actual research process stages
+    // Get real session data from session manager
+    const session = sessionManager.getSession(sessionId)
 
-    const mockStatuses = [
-      { status: "processing", progress: 10, message: "Building search queries..." },
-      { status: "processing", progress: 20, message: "Searching Zillow with Exa API..." },
-      { status: "processing", progress: 35, message: "Searching Apartments.com..." },
-      { status: "processing", progress: 50, message: "Searching StreetEasy..." },
-      { status: "processing", progress: 65, message: "Searching Craigslist..." },
-      { status: "processing", progress: 80, message: "Parsing listings with Gemini AI..." },
-      { status: "processing", progress: 90, message: "Scoring and ranking properties..." },
-      { status: "processing", progress: 95, message: "Removing duplicates..." },
-      { status: "completed", progress: 100, message: "Research completed - found apartments!" },
-    ]
+    if (!session) {
+      // Session not found - it might be a new session or expired
+      return NextResponse.json({
+        sessionId,
+        status: "not_found",
+        progress: 0,
+        message: "Session not found or expired",
+        lastUpdated: new Date().toISOString(),
+      }, { status: 404 })
+    }
 
-    // Simulate progression based on time (longer for real API calls)
-    const now = Date.now()
-    const sessionStart = now - (now % 20000) // Rough session start time (20 second cycle)
-    const elapsed = now - sessionStart
-    const progressIndex = Math.min(Math.floor(elapsed / 2500), mockStatuses.length - 1) // 2.5 seconds per stage
-
-    const currentStatus = mockStatuses[progressIndex]
-
+    // Return real session progress
     return NextResponse.json({
-      sessionId,
-      ...currentStatus,
-      lastUpdated: new Date().toISOString(),
-      estimatedTimeRemaining: progressIndex < mockStatuses.length - 1 ? 
-        `${Math.ceil((mockStatuses.length - 1 - progressIndex) * 2.5)} seconds` : 
-        null,
+      sessionId: session.sessionId,
+      status: session.status,
+      progress: session.progress,
+      message: session.message,
+      currentStep: session.currentStep,
+      currentStepIndex: session.currentStepIndex,
+      totalSteps: session.totalSteps,
+      lastUpdated: session.lastUpdatedAt.toISOString(),
+      estimatedTimeRemaining: session.estimatedTimeRemaining || null,
+      startedAt: session.startedAt.toISOString(),
+      completedAt: session.completedAt?.toISOString() || null,
+      error: session.error || null,
     })
   } catch (error) {
     console.error("[PropertyResearch] Status API error:", error)
-    return NextResponse.json({ error: "Failed to get research status" }, { status: 500 })
+    return NextResponse.json({ 
+      error: "Failed to get research status",
+      message: error instanceof Error ? error.message : "Unknown error"
+    }, { status: 500 })
   }
 }

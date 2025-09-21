@@ -141,21 +141,17 @@ export function NaturalLanguageIntake() {
     setIsProcessing(true)
 
     try {
-      const response = await fetch("/api/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: query.trim(),
-          criteria: parsedCriteria,
-          timestamp: new Date().toISOString(),
-        }),
+      // Generate a unique session ID for this search
+      const sessionId = `search-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      
+      // Navigate to results page with the session ID and query parameters
+      // The results page will handle starting the research and showing progress
+      const searchParams = new URLSearchParams({
+        query: query.trim(),
+        criteria: JSON.stringify(parsedCriteria)
       })
-
-      if (response.ok) {
-        const result = await response.json()
-        // Navigate to results page with session ID
-        window.location.href = `/results/${result.sessionId}`
-      }
+      
+      window.location.href = `/results/${sessionId}?${searchParams.toString()}`
     } catch (error) {
       console.error("Search failed:", error)
     } finally {

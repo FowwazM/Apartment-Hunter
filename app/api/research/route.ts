@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { PropertyResearchEngine } from "@/lib/property-research"
+import sessionManager from "@/lib/session-manager"
 
 interface ResearchRequest {
   sessionId: string
@@ -23,6 +24,9 @@ export async function POST(request: NextRequest) {
     console.log(`[PropertyResearch] Starting research for session ${sessionId}`)
     console.log(`[PropertyResearch] Criteria:`, JSON.stringify(criteria, null, 2))
 
+    // Initialize session in session manager
+    sessionManager.createSession(sessionId)
+
     const researchEngine = new PropertyResearchEngine()
     
     // Add error handling for missing API keys
@@ -31,8 +35,8 @@ export async function POST(request: NextRequest) {
 
       console.log(`[PropertyResearch] Research completed. Found ${results.length} top matches`)
 
-      // In a real implementation, this would save to database
-      // For now, we'll store in memory or return directly
+      // Get final session state
+      const finalSession = sessionManager.getSession(sessionId)
 
       return NextResponse.json({
         sessionId,
@@ -56,20 +60,30 @@ export async function POST(request: NextRequest) {
           source: property.source.name,
         })),
         totalFound: results.length,
-        researchCompletedAt: new Date().toISOString(),
+        researchCompletedAt: finalSession?.completedAt?.toISOString() || new Date().toISOString(),
         note: results.length > 0 ? 
           "Results from real apartment listings via Exa API + Gemini AI" : 
-          "No results found - check search criteria or API configuration"
+          "No results found - check search criteria or API configuration",
+        sessionInfo: {
+          progress: finalSession?.progress || 100,
+          totalSteps: finalSession?.totalSteps || 8,
+          startedAt: finalSession?.startedAt?.toISOString(),
+          completedAt: finalSession?.completedAt?.toISOString()
+        }
       })
     } catch (engineError) {
       console.error("[PropertyResearch] Engine error:", engineError)
+      
+      // Mark session as failed
+      sessionManager.failSession(sessionId, engineError instanceof Error ? engineError.message : 'Unknown error')
       
       // If initialization fails due to missing API keys, return helpful error
       if (engineError instanceof Error && engineError.message.includes('API_KEY')) {
         return NextResponse.json({
           error: "API configuration missing",
           message: "Please configure EXA_API_KEY and GEMINI_API_KEY environment variables",
-          details: engineError.message
+          details: engineError.message,
+          sessionId
         }, { status: 500 })
       }
       
