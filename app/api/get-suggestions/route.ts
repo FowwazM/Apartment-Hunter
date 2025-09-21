@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
           "content": String(text)
         }
       ],
-      model: 'llama-4-maverick-17b-128e-instruct',
+      model: process.env.CEREBRAS_MODEL,
       stream: false,
       max_completion_tokens: 2048,
       temperature: 0,

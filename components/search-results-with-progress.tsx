@@ -291,7 +291,7 @@ export function SearchResultsWithProgress({ sessionId, query, criteria }: Search
 
           {progress?.status === 'processing' && (
             <div className="text-xs text-muted-foreground text-center space-y-1 bg-muted/30 p-3 rounded-lg">
-              <p>🔍 Searching Zillow, Apartments.com, StreetEasy, and Craigslist</p>
+              <p>🔍 Searching Zillow, Apartments.com, StreetEasy, and Google</p>
               <p>🤖 Using AI to parse and score property listings</p>
               <p>📊 Ranking results based on your criteria</p>
             </div>

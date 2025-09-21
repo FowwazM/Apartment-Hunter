@@ -32,16 +32,11 @@ export async function POST(request: NextRequest) {
     const userId = session.user.sub
     const tourData = await request.json()
     
-    console.log("POST /api/tours - userId:", userId) // Debug log
-    console.log("POST /api/tours - tourData:", tourData) // Debug log
-    
     // Transform the data if needed and add user_id
     const tourInsert = TourModel.transformFromTourWithContact({
       ...tourData,
       user_id: userId
     })
-    
-    console.log("POST /api/tours - tourInsert after transform:", tourInsert) // Debug log
     
     const tour = await tourModel.createTour(tourInsert)
     return NextResponse.json(tour, { status: 201 })
