@@ -91,7 +91,7 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
       )
     )
     // Merge with defaults, deduped
-    return Array.from(new Set([...defaultQuestions, ...extra]))
+    return Array.from(new Set([...extra, ...defaultQuestions]))
   }
 
   // Parse "YYYY-MM-DD HH:MM:SS; q1; a1; q2; a2; ..."
