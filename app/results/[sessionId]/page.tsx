@@ -1,4 +1,4 @@
-import { SearchResultsWithProgress } from "@/components/search-results-with-progress"
+import { SearchResults } from "@/components/search-results"
 import { Header } from "@/components/header"
 
 interface ResultsPageProps {
@@ -11,16 +11,12 @@ interface ResultsPageProps {
   }
 }
 
-export default function ResultsPage({ params, searchParams }: ResultsPageProps) {
+export default function ResultsPage({ params }: ResultsPageProps) {
   return (
     <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-4 py-8">
-        <SearchResultsWithProgress 
-          sessionId={params.sessionId} 
-          query={searchParams.query}
-          criteria={searchParams.criteria}
-        />
+        <SearchResults sessionId={params.sessionId} />
       </main>
     </div>
   )
