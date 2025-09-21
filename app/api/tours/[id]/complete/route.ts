@@ -1,15 +1,23 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { TourModel } from "@/lib/models/tour"
+import { getSession } from '@auth0/nextjs-auth0'
+import { tourModel } from "@/lib/models/tour"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const session = await getSession()
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = session.user.sub
     const { rating, notes } = await request.json()
 
     if (!rating || rating < 1 || rating > 5) {
       return NextResponse.json({ error: "Rating must be between 1 and 5" }, { status: 400 })
     }
 
-    const tour = await TourModel.completeTour(params.id, rating, notes)
+    const tour = await tourModel.completeTour(params.id, userId, rating, notes)
     if (!tour) {
       return NextResponse.json({ error: "Tour not found" }, { status: 404 })
     }

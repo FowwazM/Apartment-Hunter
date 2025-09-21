@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useUser } from '@auth0/nextjs-auth0/client'
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar, Clock, Phone, MapPin, CheckCircle, AlertCircle, Star, Navigation } from "lucide-react"
+import { Calendar, Clock, Phone, MapPin, CheckCircle, AlertCircle, Star, Navigation, LogIn } from "lucide-react"
 
 interface Tour {
   id: string
@@ -28,6 +29,7 @@ interface Tour {
 }
 
 export function SchedulingDashboard() {
+  const { user, isLoading: authLoading } = useUser()
   const [tours, setTours] = useState<Tour[]>([])
   const [loading, setLoading] = useState(true)
   const [completionModal, setCompletionModal] = useState<{ isOpen: boolean; tourId: string | null }>({
@@ -42,67 +44,30 @@ export function SchedulingDashboard() {
   })
 
   useEffect(() => {
-    fetchTours()
-  }, [])
+    if (user) {
+      fetchTours()
+    } else if (!authLoading) {
+      setLoading(false)
+    }
+  }, [user, authLoading])
 
   const fetchTours = async () => {
     try {
       const response = await fetch("/api/tours")
       if (response.ok) {
         const toursData = await response.json()
+        console.log("Fetched tours data:", toursData) // Debug log
         setTours(toursData)
+      } else if (response.status === 401) {
+        console.error("User not authenticated")
+        setTours([])
       } else {
-        console.error("Failed to fetch tours")
-        // Fallback to mock data if API fails
-        setTours([
-          {
-            id: "1",
-            propertyName: "Modern Heights",
-            address: "123 Oak St, Brooklyn, NY",
-            date: "2024-01-20",
-            time: "2:00 PM",
-            status: "scheduled",
-            contact: {
-              name: "Sarah Johnson",
-              phone: "(555) 123-4567",
-              email: "sarah@modernheights.com",
-            },
-            confirmationCode: "APT-MH2024",
-            notes: "Ask about parking availability",
-          },
-          {
-            id: "2",
-            propertyName: "Urban Plaza",
-            address: "456 Main Ave, Manhattan, NY",
-            date: "2024-01-21",
-            time: "11:00 AM",
-            status: "confirmed",
-            contact: {
-              name: "Mike Chen",
-              phone: "(555) 987-6543",
-              email: "mike@urbanplaza.com",
-            },
-            confirmationCode: "APT-UP2024",
-          },
-          {
-            id: "3",
-            propertyName: "Garden Court",
-            address: "789 Park Rd, Queens, NY",
-            date: "2024-01-18",
-            time: "3:30 PM",
-            status: "completed",
-            contact: {
-              name: "Lisa Wong",
-              phone: "(555) 456-7890",
-              email: "lisa@gardencourt.com",
-            },
-            confirmationCode: "APT-GC2024",
-            rating: 4,
-          },
-        ])
+        console.error("Failed to fetch tours", response.status, response.statusText)
+        setTours([])
       }
     } catch (error) {
       console.error("Error fetching tours:", error)
+      setTours([])
     } finally {
       setLoading(false)
     }
@@ -147,6 +112,10 @@ export function SchedulingDashboard() {
   const upcomingTours = tours.filter((tour) => tour.status === "scheduled" || tour.status === "confirmed")
   const completedTours = tours.filter((tour) => tour.status === "completed")
 
+  console.log("All tours:", tours.length)
+  console.log("Upcoming tours:", upcomingTours.length)
+  console.log("Completed tours:", completedTours.length)
+
   const handleCompleteTour = (tourId: string) => {
     setCompletionModal({ isOpen: true, tourId })
     setCompletionRating(0)
@@ -185,6 +154,49 @@ export function SchedulingDashboard() {
 
   const viewTourDetails = (tour: Tour) => {
     setDetailsModal({ isOpen: true, tour })
+  }
+
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Scheduling Dashboard</h1>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show login prompt if user is not authenticated
+  if (!user) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Scheduling Dashboard</h1>
+            <p className="text-muted-foreground">Manage your apartment tours and voice agent calls</p>
+          </div>
+        </div>
+        <Card>
+          <CardContent className="p-8 text-center">
+            <LogIn className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">Please Sign In</h3>
+            <p className="text-muted-foreground mb-4">
+              You need to be signed in to view your apartment tours and manage your schedule.
+            </p>
+            <Button asChild>
+              <a href="/api/auth/login">
+                <LogIn className="mr-2 h-4 w-4" />
+                Sign In
+              </a>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   if (loading) {
@@ -507,7 +519,7 @@ export function SchedulingDashboard() {
                       <Star
                         key={i}
                         className={`w-4 h-4 ${
-                          i < detailsModal.tour.rating! ? "text-yellow-500 fill-current" : "text-gray-300"
+                          i < (detailsModal.tour?.rating || 0) ? "text-yellow-500 fill-current" : "text-gray-300"
                         }`}
                       />
                     ))}

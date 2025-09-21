@@ -1,23 +1,71 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { TourModel } from "@/lib/models/tour"
+import { getSession } from '@auth0/nextjs-auth0'
+import { tourModel } from "@/lib/models/tour"
 
-export async function GET() {
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const tours = await TourModel.getAllTours()
-    return NextResponse.json(tours)
+    const session = await getSession()
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = session.user.sub
+    const tour = await tourModel.getTourById(params.id, userId)
+    
+    if (!tour) {
+      return NextResponse.json({ error: "Tour not found" }, { status: 404 })
+    }
+
+    return NextResponse.json(tour)
   } catch (error) {
-    console.error("Error fetching tours:", error)
-    return NextResponse.json({ error: "Failed to fetch tours" }, { status: 500 })
+    console.error("Error fetching tour:", error)
+    return NextResponse.json({ error: "Failed to fetch tour" }, { status: 500 })
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const tourData = await request.json()
-    const tour = await TourModel.createTour(tourData)
-    return NextResponse.json(tour, { status: 201 })
+    const session = await getSession()
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = session.user.sub
+    const updates = await request.json()
+    
+    const tour = await tourModel.updateTour(params.id, userId, updates)
+    
+    if (!tour) {
+      return NextResponse.json({ error: "Tour not found" }, { status: 404 })
+    }
+
+    return NextResponse.json(tour)
   } catch (error) {
-    console.error("Error creating tour:", error)
-    return NextResponse.json({ error: "Failed to create tour" }, { status: 500 })
+    console.error("Error updating tour:", error)
+    return NextResponse.json({ error: "Failed to update tour" }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const session = await getSession()
+    
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = session.user.sub
+    const success = await tourModel.deleteTour(params.id, userId)
+    
+    if (!success) {
+      return NextResponse.json({ error: "Tour not found" }, { status: 404 })
+    }
+
+    return NextResponse.json({ message: "Tour deleted successfully" })
+  } catch (error) {
+    console.error("Error deleting tour:", error)
+    return NextResponse.json({ error: "Failed to delete tour" }, { status: 500 })
   }
 }

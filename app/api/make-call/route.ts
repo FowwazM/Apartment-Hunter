@@ -69,7 +69,8 @@ export async function POST(req: Request) {
     const createPayload = {
       assistantId: VAPI_ASSISTANT_ID,
       phoneNumberId: VAPI_PHONE_NUMBER_ID,
-      customer: { number: "+14804146609" }, // agent dials the listing
+      customer: { number: "+13464008051" }, // agent dials the listing
+      // customer: { number: "+14804146609" }, // agent dials the listing
       assistantOverrides: {
         variableValues: {
           listing_name: listingName,

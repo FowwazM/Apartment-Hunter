@@ -415,22 +415,21 @@ function CompletedResults({ results, sessionId }: { results: PropertyResult[], s
   const handleCallComplete = async (result: any) => {
     setCallResults(result)
 
-    // If a tour was scheduled, save it to MongoDB
+    // If a tour was scheduled, save it to Supabase
     if (result.tourScheduled && result.tourDetails && activePropertyForCall) {
       try {
         const tourData = {
-          propertyId: activePropertyForCall.id,
-          propertyName: activePropertyForCall.name,
-          propertyAddress: activePropertyForCall.address,
+          property_name: activePropertyForCall.name,
+          address: activePropertyForCall.address,
           date: result.tourDetails.date,
           time: result.tourDetails.time,
-          contact: result.tourDetails.contact,
-          confirmationCode: result.tourDetails.confirmationCode,
-          status: "upcoming",
-          callSummary: result.summary,
-          callTranscript: result.transcript,
-          questionsAsked: result.questionsAsked,
-          answersReceived: result.answersReceived,
+          status: 'scheduled',
+          contact_name: result.tourDetails.contact || activePropertyForCall.name || 'Property Contact',
+          contact_phone: activePropertyForCall.contact?.phone || 'Unknown',
+          contact_email: activePropertyForCall.contact?.email || 'Unknown',
+          confirmation_code: result.tourDetails.confirmationCode || `TOUR-${Date.now()}`,
+          notes: `Voice agent call summary: ${result.summary}`,
+          call_id: result.callId || null,
         }
 
         const response = await fetch("/api/tours", {
@@ -440,13 +439,14 @@ function CompletedResults({ results, sessionId }: { results: PropertyResult[], s
           },
           body: JSON.stringify(tourData),
         })
-      if (!response.ok) {
+        
+        if (!response.ok) {
           console.error("Failed to save tour to database")
-      } else {
+        } else {
           console.log("Tour successfully saved to database")
-      }
+        }
       } catch (error) {
-          console.error("Error saving tour to database:", error)
+        console.error("Error saving tour to database:", error)
       }
     }
   }

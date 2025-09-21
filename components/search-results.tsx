@@ -275,8 +275,43 @@ export function SearchResults({ sessionId }: SearchResultsProps) {
     setVoiceAgentOpen(true);
   };
 
-  const handleCallComplete = (result: any) => {
+  const handleCallComplete = async (result: any) => {
     setCallResults(result);
+
+    // If a tour was scheduled, save it to Supabase
+    if (result.tourScheduled && result.tourDetails && activePropertyForCall) {
+      try {
+        const tourData = {
+          property_name: activePropertyForCall.name,
+          address: activePropertyForCall.address,
+          date: result.tourDetails.date,
+          time: result.tourDetails.time,
+          status: 'scheduled',
+          contact_name: result.tourDetails.contact || activePropertyForCall.name || 'Property Contact',
+          contact_phone: activePropertyForCall.contact?.phone || 'Unknown',
+          contact_email: activePropertyForCall.contact?.email || 'Unknown',
+          confirmation_code: result.tourDetails.confirmationCode || `TOUR-${Date.now()}`,
+          notes: `Voice agent call summary: ${result.summary}`,
+          call_id: result.callId || null,
+        }
+
+        const response = await fetch("/api/tours", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(tourData),
+        })
+        
+        if (!response.ok) {
+          console.error("Failed to save tour to database")
+        } else {
+          console.log("Tour successfully saved to database")
+        }
+      } catch (error) {
+        console.error("Error saving tour to database:", error)
+      }
+    }
   };
 
   const handleScheduleAnother = () => {
