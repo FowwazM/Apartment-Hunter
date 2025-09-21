@@ -1,24 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import {
-  Calendar,
-  Clock,
-  Phone,
-  MapPin,
-  CheckCircle,
-  AlertCircle,
-  PhoneCall,
-  Star,
-  Navigation,
-  Bell,
-  Settings,
-} from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Calendar, Clock, Phone, MapPin, CheckCircle, AlertCircle, Star, Navigation } from "lucide-react"
 
 interface Tour {
   id: string
@@ -38,86 +27,86 @@ interface Tour {
   callId?: string
 }
 
-interface ActiveCall {
-  id: string
-  propertyName: string
-  status: "dialing" | "connected" | "speaking" | "completed" | "failed"
-  duration: number
-  progress: number
-  currentAction: string
-}
-
 export function SchedulingDashboard() {
   const [tours, setTours] = useState<Tour[]>([])
-  const [activeCalls, setActiveCalls] = useState<ActiveCall[]>([])
-  const [notifications, setNotifications] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [completionModal, setCompletionModal] = useState<{ isOpen: boolean; tourId: string | null }>({
+    isOpen: false,
+    tourId: null,
+  })
+  const [completionRating, setCompletionRating] = useState(0)
+  const [completionNotes, setCompletionNotes] = useState("")
+  const [detailsModal, setDetailsModal] = useState<{ isOpen: boolean; tour: Tour | null }>({
+    isOpen: false,
+    tour: null,
+  })
 
   useEffect(() => {
-    // Mock data - in real app would come from API
-    setTours([
-      {
-        id: "1",
-        propertyName: "Modern Heights",
-        address: "123 Oak St, Brooklyn, NY",
-        date: "2024-01-20",
-        time: "2:00 PM",
-        status: "scheduled",
-        contact: {
-          name: "Sarah Johnson",
-          phone: "(555) 123-4567",
-          email: "sarah@modernheights.com",
-        },
-        confirmationCode: "APT-MH2024",
-        notes: "Ask about parking availability",
-      },
-      {
-        id: "2",
-        propertyName: "Urban Plaza",
-        address: "456 Main Ave, Manhattan, NY",
-        date: "2024-01-21",
-        time: "11:00 AM",
-        status: "confirmed",
-        contact: {
-          name: "Mike Chen",
-          phone: "(555) 987-6543",
-          email: "mike@urbanplaza.com",
-        },
-        confirmationCode: "APT-UP2024",
-      },
-      {
-        id: "3",
-        propertyName: "Garden Court",
-        address: "789 Park Rd, Queens, NY",
-        date: "2024-01-18",
-        time: "3:30 PM",
-        status: "completed",
-        contact: {
-          name: "Lisa Wong",
-          phone: "(555) 456-7890",
-          email: "lisa@gardencourt.com",
-        },
-        confirmationCode: "APT-GC2024",
-        rating: 4,
-      },
-    ])
-
-    setActiveCalls([
-      {
-        id: "call-1",
-        propertyName: "Riverside Apartments",
-        status: "speaking",
-        duration: 145,
-        progress: 65,
-        currentAction: "Asking about amenities and scheduling tour...",
-      },
-    ])
-
-    setNotifications([
-      "Tour confirmed for Modern Heights tomorrow at 2:00 PM",
-      "New property match found: Sunset Towers",
-      "Voice agent successfully booked tour at Urban Plaza",
-    ])
+    fetchTours()
   }, [])
+
+  const fetchTours = async () => {
+    try {
+      const response = await fetch("/api/tours")
+      if (response.ok) {
+        const toursData = await response.json()
+        setTours(toursData)
+      } else {
+        console.error("Failed to fetch tours")
+        // Fallback to mock data if API fails
+        setTours([
+          {
+            id: "1",
+            propertyName: "Modern Heights",
+            address: "123 Oak St, Brooklyn, NY",
+            date: "2024-01-20",
+            time: "2:00 PM",
+            status: "scheduled",
+            contact: {
+              name: "Sarah Johnson",
+              phone: "(555) 123-4567",
+              email: "sarah@modernheights.com",
+            },
+            confirmationCode: "APT-MH2024",
+            notes: "Ask about parking availability",
+          },
+          {
+            id: "2",
+            propertyName: "Urban Plaza",
+            address: "456 Main Ave, Manhattan, NY",
+            date: "2024-01-21",
+            time: "11:00 AM",
+            status: "confirmed",
+            contact: {
+              name: "Mike Chen",
+              phone: "(555) 987-6543",
+              email: "mike@urbanplaza.com",
+            },
+            confirmationCode: "APT-UP2024",
+          },
+          {
+            id: "3",
+            propertyName: "Garden Court",
+            address: "789 Park Rd, Queens, NY",
+            date: "2024-01-18",
+            time: "3:30 PM",
+            status: "completed",
+            contact: {
+              name: "Lisa Wong",
+              phone: "(555) 456-7890",
+              email: "lisa@gardencourt.com",
+            },
+            confirmationCode: "APT-GC2024",
+            rating: 4,
+          },
+        ])
+      }
+    } catch (error) {
+      console.error("Error fetching tours:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -158,6 +147,71 @@ export function SchedulingDashboard() {
   const upcomingTours = tours.filter((tour) => tour.status === "scheduled" || tour.status === "confirmed")
   const completedTours = tours.filter((tour) => tour.status === "completed")
 
+  const handleCompleteTour = (tourId: string) => {
+    setCompletionModal({ isOpen: true, tourId })
+    setCompletionRating(0)
+    setCompletionNotes("")
+  }
+
+  const submitTourCompletion = async () => {
+    if (completionModal.tourId && completionRating > 0) {
+      try {
+        const response = await fetch(`/api/tours/${completionModal.tourId}/complete`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            rating: completionRating,
+            notes: completionNotes,
+          }),
+        })
+
+        if (response.ok) {
+          const updatedTour = await response.json()
+          setTours((prevTours) => prevTours.map((tour) => (tour.id === completionModal.tourId ? updatedTour : tour)))
+        } else {
+          console.error("Failed to complete tour")
+        }
+      } catch (error) {
+        console.error("Error completing tour:", error)
+      }
+
+      setCompletionModal({ isOpen: false, tourId: null })
+      setCompletionRating(0)
+      setCompletionNotes("")
+    }
+  }
+
+  const viewTourDetails = (tour: Tour) => {
+    setDetailsModal({ isOpen: true, tour })
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Scheduling Dashboard</h1>
+            <p className="text-muted-foreground">Loading your apartment tours...</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-6">
+                <div className="animate-pulse">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -165,52 +219,10 @@ export function SchedulingDashboard() {
           <h1 className="text-3xl font-bold">Scheduling Dashboard</h1>
           <p className="text-muted-foreground">Manage your apartment tours and voice agent calls</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm">
-            <Bell className="w-4 h-4 mr-2" />
-            Notifications ({notifications.length})
-          </Button>
-          <Button variant="outline" size="sm">
-            <Settings className="w-4 h-4 mr-2" />
-            Settings
-          </Button>
-        </div>
       </div>
 
-      {/* Live Activity */}
-      {activeCalls.length > 0 && (
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <PhoneCall className="w-5 h-5 text-primary animate-pulse" />
-              Live Voice Agent Activity
-            </CardTitle>
-            <CardDescription>AI agents are currently calling properties for you</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {activeCalls.map((call) => (
-              <div key={call.id} className="p-4 bg-background rounded-lg border">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <h4 className="font-medium">{call.propertyName}</h4>
-                    <p className="text-sm text-muted-foreground capitalize">
-                      {call.status} • {formatDuration(call.duration)}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="animate-pulse">
-                    Live
-                  </Badge>
-                </div>
-                <Progress value={call.progress} className="mb-2" />
-                <p className="text-sm text-muted-foreground">{call.currentAction}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -219,18 +231,6 @@ export function SchedulingDashboard() {
                 <p className="text-2xl font-bold">{upcomingTours.length}</p>
               </div>
               <Calendar className="w-8 h-8 text-primary" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Active Calls</p>
-                <p className="text-2xl font-bold">{activeCalls.length}</p>
-              </div>
-              <Phone className="w-8 h-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
@@ -269,10 +269,9 @@ export function SchedulingDashboard() {
 
       {/* Main Content */}
       <Tabs defaultValue="upcoming" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="upcoming">Upcoming Tours</TabsTrigger>
           <TabsTrigger value="completed">Completed Tours</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
         </TabsList>
 
         <TabsContent value="upcoming" className="space-y-4">
@@ -304,12 +303,6 @@ export function SchedulingDashboard() {
                         </div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-muted-foreground mb-1">Confirmation</p>
-                      <Badge variant="outline" className="font-mono">
-                        {tour.confirmationCode}
-                      </Badge>
-                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -339,12 +332,15 @@ export function SchedulingDashboard() {
                       <Calendar className="w-4 h-4 mr-2" />
                       Reschedule
                     </Button>
-                    {tour.status === "scheduled" && (
-                      <Button variant="outline" size="sm" className="bg-transparent">
-                        <CheckCircle className="w-4 h-4 mr-2" />
-                        Confirm Tour
-                      </Button>
-                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-green-50 border-green-200 text-green-700 hover:bg-green-100"
+                      onClick={() => handleCompleteTour(tour.id)}
+                    >
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Complete Tour
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -407,7 +403,12 @@ export function SchedulingDashboard() {
                   </div>
 
                   <div className="flex gap-3">
-                    <Button variant="outline" size="sm" className="bg-transparent">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-transparent"
+                      onClick={() => viewTourDetails(tour)}
+                    >
                       View Details
                     </Button>
                     <Button variant="outline" size="sm" className="bg-transparent">
@@ -434,29 +435,100 @@ export function SchedulingDashboard() {
             </Card>
           )}
         </TabsContent>
+      </Tabs>
 
-        <TabsContent value="notifications" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent Notifications</CardTitle>
-              <CardDescription>Stay updated on your apartment hunting progress</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {notifications.map((notification, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-                  <Bell className="w-4 h-4 text-primary mt-0.5" />
-                  <div className="flex-1">
-                    <p className="text-sm">{notification}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {index === 0 ? "2 hours ago" : index === 1 ? "1 day ago" : "2 days ago"}
-                    </p>
+      {/* Tour Completion Modal */}
+      <Dialog open={completionModal.isOpen} onOpenChange={(open) => setCompletionModal({ isOpen: open, tourId: null })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Complete Tour</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Rate your experience (1-5 stars)</label>
+              <div className="flex gap-1">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <button key={i} onClick={() => setCompletionRating(i + 1)} className="p-1">
+                    <Star
+                      className={`w-6 h-6 ${i < completionRating ? "text-yellow-500 fill-current" : "text-gray-300"}`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-2 block">Notes (optional)</label>
+              <Textarea
+                placeholder="Add any notes about the tour..."
+                value={completionNotes}
+                onChange={(e) => setCompletionNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => setCompletionModal({ isOpen: false, tourId: null })}>
+                Cancel
+              </Button>
+              <Button onClick={submitTourCompletion} disabled={completionRating === 0}>
+                Complete Tour
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tour Details Modal */}
+      <Dialog open={detailsModal.isOpen} onOpenChange={(open) => setDetailsModal({ isOpen: open, tour: null })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tour Details</DialogTitle>
+          </DialogHeader>
+          {detailsModal.tour && (
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold text-lg">{detailsModal.tour.propertyName}</h3>
+                <p className="text-muted-foreground">{detailsModal.tour.address}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="font-medium">Date:</span>
+                  <p>{new Date(detailsModal.tour.date).toLocaleDateString()}</p>
+                </div>
+                <div>
+                  <span className="font-medium">Time:</span>
+                  <p>{detailsModal.tour.time}</p>
+                </div>
+              </div>
+              {detailsModal.tour.rating && (
+                <div>
+                  <span className="font-medium">Rating:</span>
+                  <div className="flex items-center gap-1 mt-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star
+                        key={i}
+                        className={`w-4 h-4 ${
+                          i < detailsModal.tour.rating! ? "text-yellow-500 fill-current" : "text-gray-300"
+                        }`}
+                      />
+                    ))}
                   </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              )}
+              {detailsModal.tour.notes && (
+                <div>
+                  <span className="font-medium">Notes:</span>
+                  <p className="text-sm text-muted-foreground mt-1">{detailsModal.tour.notes}</p>
+                </div>
+              )}
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setDetailsModal({ isOpen: false, tour: null })}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
