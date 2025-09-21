@@ -99,12 +99,49 @@ export function SearchResults({ sessionId }: SearchResultsProps) {
     setSelectedProperty(propertyId);
   };
 
-  const handleCall = (property: PropertyResult) => {
-    console.log(
-      `Initiating call to ${property.name} at ${property.address}...`
-    );
-    // TODO: Integrate with voice agent API or component
+  const handleCall = async (property: PropertyResult) => {
+    console.log(`Initiating call to ${property.name} at ${property.address}...`);
+
+    try {
+      const res = await fetch("/api/make-call", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          listingName: property.name,
+          listingAddress: property.address,
+          userQuestions: [
+            "Is parking included?",
+            "Any pet fees?",
+          ],
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        console.error("Call failed:", data);
+        alert("Call failed. Check console for details.");
+        return;
+      }
+
+      if (data.timedOut) {
+        // Long calls might hit the 5m timeout; decide how to handle
+        alert(`Still ${data.status}. Timed out waiting — try again or poll a status route.`);
+        return;
+      }
+
+      // Success: call ended — you have summary + transcript
+      console.log("Call complete:", data);
+      alert("Call ended — summary and transcript received. Check console.");
+      // e.g., setState(data.summary, data.transcript) to show in UI
+    } catch (err) {
+      console.error("Error starting/waiting for call:", err);
+      alert("Something went wrong.");
+    }
   };
+
+
+
 
   return (
     <div className="space-y-6">
