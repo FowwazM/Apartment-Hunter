@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { Progress } from "@/components/ui/progress"
 import { Phone, PhoneCall, PhoneOff, CheckCircle, XCircle, Calendar, MessageSquare, Volume2, HelpCircle, CornerDownRight } from "lucide-react"
 
@@ -44,6 +45,7 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
   const [currentMessage, setCurrentMessage] = useState("")
   const [transcript, setTranscript] = useState<string[]>([])
   const [customQuestions, setCustomQuestions] = useState("")
+  const [meetupTimes, setMeetupTimes] = useState<string>("")
   const [callProgress, setCallProgress] = useState(0)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -328,6 +330,15 @@ export function VoiceAgent({ property, onCallComplete }: VoiceAgentProps) {
               value={customQuestions}
               onChange={(e) => setCustomQuestions(e.target.value)}
               className="min-h-[80px]"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Available Meetup Times:</label>
+            <Input
+              placeholder="e.g., Weekdays between 9am–5pm"
+              value={meetupTimes}
+              onChange={(e) => setMeetupTimes(e.target.value)}
+              className="w-full"
             />
           </div>
         </div>
