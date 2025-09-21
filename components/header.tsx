@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { MapPin } from "lucide-react"
 import Link from "next/link"
+import { AuthButton } from "@/components/auth-button"
 
 export function Header() {
   return (
@@ -27,10 +28,7 @@ export function Header() {
           </nav>
 
           <div className="flex items-center space-x-3">
-            <Button variant="outline" size="sm">
-              Sign In
-            </Button>
-            <Button size="sm">Get Started</Button>
+            <AuthButton />
           </div>
         </div>
       </div>

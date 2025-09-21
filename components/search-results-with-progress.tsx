@@ -412,8 +412,43 @@ function CompletedResults({ results, sessionId }: { results: PropertyResult[], s
     setVoiceAgentOpen(true)
   }
 
-  const handleCallComplete = (result: any) => {
+  const handleCallComplete = async (result: any) => {
     setCallResults(result)
+
+    // If a tour was scheduled, save it to MongoDB
+    if (result.tourScheduled && result.tourDetails && activePropertyForCall) {
+      try {
+        const tourData = {
+          propertyId: activePropertyForCall.id,
+          propertyName: activePropertyForCall.name,
+          propertyAddress: activePropertyForCall.address,
+          date: result.tourDetails.date,
+          time: result.tourDetails.time,
+          contact: result.tourDetails.contact,
+          confirmationCode: result.tourDetails.confirmationCode,
+          status: "upcoming",
+          callSummary: result.summary,
+          callTranscript: result.transcript,
+          questionsAsked: result.questionsAsked,
+          answersReceived: result.answersReceived,
+        }
+
+        const response = await fetch("/api/tours", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(tourData),
+        })
+      if (!response.ok) {
+          console.error("Failed to save tour to database")
+      } else {
+          console.log("Tour successfully saved to database")
+      }
+      } catch (error) {
+          console.error("Error saving tour to database:", error)
+      }
+    }
   }
 
   const handleScheduleAnother = () => {
@@ -576,6 +611,8 @@ function CompletedResults({ results, sessionId }: { results: PropertyResult[], s
         } catch (error) {
           console.error(`Failed to fetch events from calendar ${calendar.summary}:`, error)
         }
+
+
       }
      
       // Sort events by start time
