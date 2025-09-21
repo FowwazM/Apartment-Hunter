@@ -1,5 +1,6 @@
 import Exa from "exa-js"
 import { GoogleGenerativeAI } from "@google/generative-ai"
+import sessionManager from "./session-manager"
 
 interface PropertySource {
   id: string
@@ -57,11 +58,15 @@ export class PropertyResearchEngine {
   private exa: Exa
   private gemini: GoogleGenerativeAI
   private sources: PropertySource[] = [
-    { id: "zillow", name: "Zillow", url: "https://zillow.com", lastUpdated: new Date() },
-    { id: "apartments", name: "Apartments.com", url: "https://apartments.com", lastUpdated: new Date() },
-    { id: "streeteasy", name: "StreetEasy", url: "https://streeteasy.com", lastUpdated: new Date() },
     { id: "google", name: "Google", url: "https://google.com", lastUpdated: new Date() },
   ]
+
+  // private sources: PropertySource[] = [
+  //   { id: "zillow", name: "Zillow", url: "https://zillow.com", lastUpdated: new Date() },
+  //   { id: "apartments", name: "Apartments.com", url: "https://apartments.com", lastUpdated: new Date() },
+  //   { id: "streeteasy", name: "StreetEasy", url: "https://streeteasy.com", lastUpdated: new Date() },
+  //   { id: "google", name: "Google", url: "https://google.com", lastUpdated: new Date() },
+  // ]
 
   constructor() {
     if (!process.env.EXA_API_KEY) {
@@ -78,39 +83,95 @@ export class PropertyResearchEngine {
   async researchProperties(criteria: SearchCriteria, sessionId: string): Promise<ScoredProperty[]> {
     console.log(`[PropertyResearch] Starting property research for session ${sessionId}`)
 
-    // Build search queries for different apartment listing sites
-    const searchQueries = this.buildSearchQueries(criteria)
-    const allProperties: RawProperty[] = []
+    // Initialize session
+    sessionManager.createSession(sessionId)
+    
+    try {
+      // Step 1: Build search queries
+      sessionManager.updateProgress(sessionId, {
+        status: 'processing',
+        progress: 10,
+        message: 'Building search queries...',
+        currentStep: 'building_queries',
+        currentStepIndex: 1
+      })
 
-    // Search each query using Exa
-    for (const query of searchQueries) {
-      console.log(`[PropertyResearch] Searching with query: ${query.text}`)
-      
-      try {
-        const searchResults = await this.searchWithExa(query.text, query.domain)
-        const properties = await this.parseResultsWithGemini(searchResults, criteria, query.source)
-        allProperties.push(...properties)
+      const searchQueries = this.buildSearchQueries(criteria)
+      const allProperties: RawProperty[] = []
 
-        // Add delay to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        console.log(`[PropertyResearch] Finished searching with query: ${query.text}`)
-      } catch (error) {
-        console.error(`[PropertyResearch] Error searching ${query.source.name}:`, error)
-        // Continue with other sources even if one fails
+      // Step 2-5: Search each source
+      let currentProgress = 20
+      const progressPerSource = 45 / searchQueries.length // 45% progress across all sources
+
+      for (let i = 0; i < searchQueries.length; i++) {
+        const query = searchQueries[i]
+        
+        sessionManager.updateProgress(sessionId, {
+          progress: Math.round(currentProgress),
+          message: `Searching ${query.source.name} with Exa API...`,
+          currentStep: `searching_${query.source.id}`,
+          currentStepIndex: i + 2
+        })
+
+        console.log(`[PropertyResearch] Searching with query: ${query.text}`)
+        
+        try {
+          const searchResults = await this.searchWithExa(query.text, query.domain)
+          const properties = await this.parseResultsWithGemini(searchResults, criteria, query.source)
+          allProperties.push(...properties)
+
+          // Add delay to avoid rate limiting
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        } catch (error) {
+          console.error(`[PropertyResearch] Error searching ${query.source.name}:`, error)
+          // Continue with other sources even if one fails
+        }
+
+        currentProgress += progressPerSource
       }
+
+      console.log(`[PropertyResearch] Found ${allProperties.length} raw properties`)
+
+      // Step 6: Parse with AI
+      sessionManager.updateProgress(sessionId, {
+        progress: 75,
+        message: 'Processing listings with Gemini AI...',
+        currentStep: 'ai_processing',
+        currentStepIndex: 6
+      })
+
+      // Step 7: Remove duplicates
+      sessionManager.updateProgress(sessionId, {
+        progress: 85,
+        message: 'Removing duplicates...',
+        currentStep: 'deduplication',
+        currentStepIndex: 7
+      })
+
+      const uniqueProperties = this.deduplicateProperties(allProperties)
+      console.log(`[PropertyResearch] After deduplication: ${uniqueProperties.length} properties`)
+
+      // Step 8: Score and rank
+      sessionManager.updateProgress(sessionId, {
+        progress: 95,
+        message: 'Scoring and ranking properties...',
+        currentStep: 'scoring',
+        currentStepIndex: 8
+      })
+
+      const scoredProperties = this.scoreProperties(uniqueProperties, criteria)
+      const finalResults = scoredProperties.slice(0, 10)
+
+      // Complete session
+      sessionManager.completeSession(sessionId, finalResults)
+
+      return finalResults
+
+    } catch (error) {
+      console.error(`[PropertyResearch] Research failed for session ${sessionId}:`, error)
+      sessionManager.failSession(sessionId, error instanceof Error ? error.message : 'Unknown error')
+      throw error
     }
-
-    console.log(`[PropertyResearch] Found ${allProperties.length} raw properties`)
-
-    // Remove duplicates based on address similarity
-    const uniqueProperties = this.deduplicateProperties(allProperties)
-    console.log(`[PropertyResearch] After deduplication: ${uniqueProperties.length} properties`)
-
-    // Score and rank properties
-    const scoredProperties = this.scoreProperties(uniqueProperties, criteria)
-
-    // Return top 10
-    return scoredProperties.slice(0, 10)
   }
 
   private buildSearchQueries(criteria: SearchCriteria): Array<{text: string, domain?: string, source: PropertySource}> {
