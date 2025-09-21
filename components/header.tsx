@@ -21,9 +21,9 @@ export function Header() {
             <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
               Dashboard
             </Link>
-            <Link href="/itinerary" className="text-muted-foreground hover:text-foreground transition-colors">
+            {/*<Link href="/itinerary" className="text-muted-foreground hover:text-foreground transition-colors">
               Itinerary
-            </Link>
+            </Link>*/}
           </nav>
 
           <div className="flex items-center space-x-3">

@@ -24,7 +24,7 @@ const features = [
     icon: Calendar,
     title: "Smart Scheduling",
     description:
-      "Get an optimized tour itinerary that maximizes your time and helps you see the best options efficiently.",
+      "Intelligent scheduling system that helps you organize and manage your apartment viewing appointments efficiently.",
   },
   {
     icon: Star,
